@@ -7,7 +7,7 @@
   "css": "style.css",
   "author": "randaw123",
   "version": "0.1.0",
-  "homePage": "",
+  "homePage": "https://github.com/randaw123/SillyTavern-State-Tracker",
   "auto_update": false,
   "minimum_client_version": "1.19.0",
   "generate_interceptor": "stateTrackerInterceptor"
