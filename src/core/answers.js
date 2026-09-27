@@ -67,8 +67,9 @@ function updateEntry(message, swipeId, trackerId, change) {
     writeBlock(message, swipeId, entries);
 }
 
-export function storeAnswer(message, swipeId, trackerId, value, now = Date.now()) {
-    updateEntry(message, swipeId, trackerId, () => ({ value, outdated: false, edited: false, updatedAt: now }));
+// `run` records which connection and model answered and how long it took: { profile, model, ms }.
+export function storeAnswer(message, swipeId, trackerId, value, now = Date.now(), run = null) {
+    updateEntry(message, swipeId, trackerId, () => ({ value, outdated: false, edited: false, updatedAt: now, ...(run ? { run } : {}) }));
 }
 
 export function storeError(message, swipeId, trackerId, error, now = Date.now()) {

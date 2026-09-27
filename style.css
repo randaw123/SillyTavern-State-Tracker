@@ -233,8 +233,9 @@
     content: '• ';
 }
 
-.st-empty {
-    font-size: 0.9em;
+.st-empty,
+.st-run {
+    font-size: 0.85em;
 }
 
 .st-badge {

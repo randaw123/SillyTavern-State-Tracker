@@ -39,11 +39,15 @@ export async function createRuntime() {
     });
 
     const engine = new RunEngine({
-        execute: (job, signal) => sendPrompt(job.tracker, buildJobPrompt(job.tracker, job.message, job.swipeId), signal),
+        execute: async (job, signal) => {
+            const { answer, details } = await sendPrompt(job.tracker, buildJobPrompt(job.tracker, job.message, job.swipeId), signal);
+            job.run = details; // read back in commit, so the engine only ever handles the answer text
+            return answer;
+        },
         commit: (job, outcome) => {
             if (!(ctx().chat ?? []).includes(job.message)) return;
             if (swipeStamp(job.message, job.swipeId) !== job.meta.stamp) return;
-            if (outcome.value !== undefined) storeAnswer(job.message, job.swipeId, job.tracker.id, outcome.value);
+            if (outcome.value !== undefined) storeAnswer(job.message, job.swipeId, job.tracker.id, outcome.value, Date.now(), job.run);
             else storeError(job.message, job.swipeId, job.tracker.id, outcome.error);
             saveChat();
             refreshInjections();
@@ -127,15 +131,9 @@ export async function createRuntime() {
             const seconds = getSettings().timeoutSeconds;
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), seconds * 1000);
-            const started = performance.now();
             try {
-                const answer = await raceAbort(sendPrompt(tracker, prompt, controller.signal), controller.signal);
-                return {
-                    messages: toChatMessages(prompt),
-                    answer,
-                    ms: Math.round(performance.now() - started),
-                    model: tracker.profileId ? `Profile: ${profileName(tracker.profileId) || 'missing profile'}` : 'Same as chat',
-                };
+                const { answer, details } = await raceAbort(sendPrompt(tracker, prompt, controller.signal), controller.signal);
+                return { messages: toChatMessages(prompt), answer, run: details };
             } catch (error) {
                 if (error instanceof RunCancelledError) throw new Error(`Timed out after ${seconds} seconds.`);
                 throw error;

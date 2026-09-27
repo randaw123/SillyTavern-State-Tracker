@@ -1,5 +1,6 @@
 // Tracker editor popup with the Test button (spec sections 7.2 and 7.5).
 import { button, el } from './dom.js';
+import { renderRun } from './answer-view.js';
 import { ctx } from '../st/context.js';
 import { normalizeTracker } from '../core/settings.js';
 import { validateTracker } from '../core/validate.js';
@@ -115,7 +116,7 @@ export async function openEditor(runtime, trackerId, draft = null) {
         try {
             const result = await runtime.testTracker(read());
             testOutput.replaceChildren(
-                el('div', { class: 'st-muted', text: `${result.model} · ${result.ms} ms` }),
+                result.run ? renderRun(result.run) : null,
                 ...result.messages.map(m => el('div', { class: 'st-test-message' }, el('b', { text: m.role.toUpperCase() }), el('pre', { text: m.content }))),
                 el('div', { class: 'st-test-message' }, el('b', { text: 'ANSWER' }), el('pre', { text: result.answer })));
         } catch (error) {

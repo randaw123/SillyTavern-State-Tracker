@@ -1,6 +1,6 @@
 // Side panel (spec section 7.3). Answers are shown with textContent only.
 import { button, el } from './dom.js';
-import { caret, renderAnswer } from './answer-view.js';
+import { caret, renderAnswer, renderRun } from './answer-view.js';
 import { ctx } from '../st/context.js';
 import { displayedSwipeId, getEntries, latestAiIndex } from '../core/answers.js';
 import { createCollapseStore } from '../core/collapse.js';
@@ -97,6 +97,7 @@ export function initSidePanel(runtime) {
                 isCollapsed: category => collapse.isCollapsed(tracker.id, category),
                 onToggle: category => toggle(tracker.id, category),
             }));
+            if (entry.run) row.append(renderRun(entry.run));
         }
         else if (!status && !entry?.error) row.append(el('div', { class: 'st-muted', text: 'no answer yet' }));
         const label = entry?.error ? 'Retry' : entry?.value ? 'Rerun' : 'Run';
