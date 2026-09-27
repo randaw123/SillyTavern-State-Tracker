@@ -13,10 +13,17 @@ export function initStatusLine(runtime) {
     if (form?.parentElement) form.parentElement.insertBefore(line, form);
     else document.body.append(line);
 
+    let ticker = null;
     const update = () => {
         const message = describeLockStatus(runtime.engine.lockProgress(), runtime.isWaiting());
         line.hidden = !message;
         if (message) text.textContent = message;
+        // Redraw every second while the line shows, so its timer keeps counting.
+        if (message && !ticker) ticker = setInterval(update, 1000);
+        else if (!message && ticker) {
+            clearInterval(ticker);
+            ticker = null;
+        }
     };
     runtime.subscribe(update);
     update();

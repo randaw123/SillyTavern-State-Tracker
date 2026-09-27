@@ -14,7 +14,7 @@ function deferred() {
     return { promise, resolve, reject };
 }
 
-function harness({ timeoutMs = 1000 } = {}) {
+function harness({ timeoutMs = 1000, now } = {}) {
     const calls = [];
     const commits = [];
     const lockChanges = [];
@@ -27,6 +27,7 @@ function harness({ timeoutMs = 1000 } = {}) {
         commit: (job, outcome) => commits.push({ id: job.tracker.id, ...outcome }),
         onLockChange: locked => lockChanges.push(locked),
         timeoutMs: () => timeoutMs,
+        now,
     });
     return { engine, calls, commits, lockChanges };
 }
@@ -159,16 +160,16 @@ test('waitForUnlock resolves once every locking run has finished', async () => {
 });
 
 test('lockProgress and describeLockStatus report the chain position', async () => {
-    const h = harness();
+    const h = harness({ now: () => 1000 });
     h.engine.start({ message: M, swipeId: 0, trackers: [T('a'), T('b')], lockChain: true });
     await tick();
     const first = h.engine.lockProgress();
-    assert.deepEqual(first, { locked: true, total: 2, done: 0, current: 'A', running: 1 });
-    assert.equal(describeLockStatus(first, false), 'Updating trackers 1/2 · A');
+    assert.deepEqual(first, { locked: true, total: 2, done: 0, current: 'A', running: 1, currentStartedAt: 1000, lockStartedAt: 1000 });
+    assert.equal(describeLockStatus(first, false, 1000), 'Updating trackers 1/2 · A · 0 s');
     h.calls[0].resolve('A');
     await tick();
-    assert.equal(describeLockStatus(h.engine.lockProgress(), false), 'Updating trackers 2/2 · B');
-    assert.equal(describeLockStatus(h.engine.lockProgress(), true), 'Waiting for trackers…');
+    assert.equal(describeLockStatus(h.engine.lockProgress(), false, 1000), 'Updating trackers 2/2 · B · 0 s');
+    assert.equal(describeLockStatus(h.engine.lockProgress(), true, 1000), 'Waiting for trackers… · 0 s');
     assert.equal(describeLockStatus({ locked: true, total: 1, done: 0, current: null, running: 1 }, false), 'Updating trackers · 1 running');
     assert.equal(describeLockStatus({ locked: false, total: 0, done: 0, current: null, running: 0 }, false), null);
 });
@@ -184,4 +185,29 @@ test('errorText falls back sensibly', () => {
     assert.equal(errorText(new Error('boom')), 'boom');
     assert.equal(errorText('plain'), 'plain');
     assert.equal(errorText(undefined), 'Unknown error');
+});
+
+test('the status line shows how long the current in-order tracker has been running', () => {
+    const progress = { locked: true, total: 1, done: 0, current: 'Continuity', running: 1, currentStartedAt: 1000, lockStartedAt: 500 };
+    assert.equal(describeLockStatus(progress, false, 13500), 'Updating trackers 1/1 · Continuity · 12 s');
+});
+
+test('parallel runs and waiting show how long trackers have been running overall', () => {
+    const progress = { locked: true, total: 1, done: 0, current: null, running: 1, currentStartedAt: null, lockStartedAt: 0 };
+    assert.equal(describeLockStatus(progress, false, 5400), 'Updating trackers · 1 running · 5 s');
+    assert.equal(describeLockStatus(progress, true, 5400), 'Waiting for trackers… · 5 s');
+});
+
+test('the next in-order tracker starts its own timer', async () => {
+    let clock = 0;
+    const h = harness({ now: () => clock });
+    h.engine.start({ message: M, swipeId: 0, trackers: [T('a'), T('b')], lockChain: true });
+    await tick();
+    clock = 7000;
+    h.calls[0].resolve('A');
+    await tick();
+    const progress = h.engine.lockProgress();
+    assert.equal(progress.current, 'B');
+    assert.equal(progress.currentStartedAt, 7000);
+    assert.equal(progress.lockStartedAt, 0);
 });

@@ -25,6 +25,7 @@ After each AI reply, every tracker sends a prompt you wrote to a model you choos
   - **None** shows it in the panel only.
 - **In order** trackers run one at a time and, by default, SillyTavern waits for them before the next reply. **Parallel** trackers run alongside them.
 - Open the side panel from the **wand menu → State Tracker**, or with the tracker icon on any AI message.
+- While trackers run, a line above the chat box shows progress and a timer, such as **Updating trackers 1/1 · Continuity · 12 s**.
 - In the side panel, click a tracker's name to collapse or expand it. An answer written as `category:` headings with `- Name | field | field` lines shows one field per line, and each category collapses when you click its heading. Under each answer, a faded line shows the model that produced it and how long it took; hover over it for the connection profile and how much the model thought. A failed run shows the same line under its error.
 - **Console logging** in the extension settings chooses what State Tracker writes to the browser console (F12): **Off**, **Errors** (failed runs, the default), **Runs** (every run with its connection, model and time), or **Everything** (also the prompts sent and the raw responses, including any thinking).
 

@@ -38,25 +38,33 @@ export function errorText(error) {
     return cause && cause !== main ? `${main}: ${cause}` : main;
 }
 
-export function describeLockStatus(progress, waiting) {
-    if (waiting) return 'Waiting for trackers…';
+// The status line text. The timer counts the current in-order tracker's run, or, for
+// parallel runs and waiting, how long the lock has been on.
+export function describeLockStatus(progress, waiting, now = Date.now()) {
+    const since = start => (typeof start === 'number' ? ` · ${Math.max(0, Math.floor((now - start) / 1000))} s` : '');
+    if (waiting) return `Waiting for trackers…${since(progress.lockStartedAt)}`;
     if (!progress.locked) return null;
     if (progress.current) {
-        return `Updating trackers ${Math.min(progress.done + 1, progress.total)}/${progress.total} · ${progress.current}`;
+        return `Updating trackers ${Math.min(progress.done + 1, progress.total)}/${progress.total} · ${progress.current}${since(progress.currentStartedAt)}`;
     }
-    return `Updating trackers · ${progress.running} running`;
+    return `Updating trackers · ${progress.running} running${since(progress.lockStartedAt)}`;
 }
 
 export class RunEngine {
     #deps;
     #jobs = new Set();
     #locked = false;
+    #lockStartedAt = null;
     #lockTotal = 0;
     #lockDone = 0;
     #unlockWaiters = [];
 
     constructor(deps) {
         this.#deps = deps;
+    }
+
+    #now() {
+        return this.#deps.now ? this.#deps.now() : Date.now();
     }
 
     get locked() {
@@ -122,12 +130,15 @@ export class RunEngine {
             done: this.#lockDone,
             current: current ? current.tracker.name : null,
             running: active.filter(job => job.status === 'running').length,
+            currentStartedAt: current ? current.startedAt : null,
+            lockStartedAt: this.#lockStartedAt,
         };
     }
 
     async #run(job) {
         if (job.finished) return;
         job.status = 'running';
+        job.startedAt = this.#now();
         this.#changed();
         const timeoutMs = this.#deps.timeoutMs?.() ?? 60000;
         const timer = setTimeout(() => {
@@ -168,6 +179,7 @@ export class RunEngine {
         const wanted = [...this.#jobs].some(job => job.locking);
         if (wanted === this.#locked) return;
         this.#locked = wanted;
+        this.#lockStartedAt = wanted ? this.#now() : null;
         if (!wanted) {
             this.#lockTotal = 0;
             this.#lockDone = 0;
