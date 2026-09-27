@@ -63,20 +63,38 @@ test('messages without swipe data still store answers', () => {
 test('adoptBlock keeps answers after Continue changes the swipe timestamps', () => {
     const m = ai('Seraphina', ['one']);
     storeAnswer(m, 0, 'loc', 'tavern', 5);
+    const before = swipeStamp(m, 0);
     m.mes += ' and more';
     m.gen_started = new Date(Date.parse('2027-01-01T00:00:00Z'));
     m.send_date = 'later';
     assert.equal(getEntry(m, 'loc'), null);
-    adoptBlock(m);
+    assert.equal(adoptBlock(m, before), swipeStamp(m, 0));
     assert.equal(getEntry(m, 'loc').value, 'tavern');
     assert.equal(m.swipe_info[0].extra.state_tracker.stamp, swipeStamp(m, 0));
 });
 
-test('markOutdated flags only entries that have a value and survives changed timestamps', () => {
+test('adoptBlock ignores a block copied from another swipe', () => {
+    const m = ai('Seraphina', ['one']);
+    storeAnswer(m, 0, 'loc', 'tavern', 5);
+    addSwipe(m, 'two');
+    const current = swipeStamp(m, 1);
+    m.gen_started = new Date(Date.parse('2027-01-01T00:00:00Z'));
+    adoptBlock(m, current);
+    assert.equal(getEntry(m, 'loc'), null);
+});
+
+test('an invalid gen_started (left by Continue on a reloaded chat) still matches after saving and reloading', () => {
+    const m = ai('Seraphina', ['one']);
+    m.gen_started = new Date(Number.NaN);
+    m.swipe_info[0].gen_started = m.gen_started;
+    storeAnswer(m, 0, 'loc', 'tavern', 5);
+    assert.equal(getEntry(roundTrip(m), 'loc')?.value, 'tavern');
+});
+
+test('markOutdated flags only entries that have a value (edits keep the swipe timestamps)', () => {
     const m = ai('Seraphina', ['one']);
     storeAnswer(m, 0, 'loc', 'tavern', 5);
     storeError(m, 0, 'mood', 'boom', 5);
-    m.send_date = 'edited';
     assert.equal(markOutdated(m), true);
     assert.equal(getEntry(m, 'loc').outdated, true);
     assert.equal(getEntry(m, 'mood').outdated, undefined);

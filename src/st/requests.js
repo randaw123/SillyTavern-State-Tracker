@@ -28,6 +28,19 @@ export function buildJobPrompt(tracker, message, swipeId) {
     }));
 }
 
+// SillyTavern's generateRaw keeps the user's reply length in one shared slot while it
+// overrides it, so two overlapping calls would restore the wrong value. Run them one at a time.
+let rawQueue = Promise.resolve();
+
+function inRawQueue(task, signal) {
+    const run = rawQueue.then(() => {
+        if (signal?.aborted) throw new Error('Cancelled before it started.');
+        return task();
+    });
+    rawQueue = run.catch(() => {});
+    return run;
+}
+
 function reasoningTemplate(name) {
     if (!name) return null;
     try {
@@ -52,7 +65,10 @@ export async function sendPrompt(tracker, prompt, signal) {
         text = typeof response === 'string' ? response : response?.content;
         template = reasoningTemplate(profile['reasoning-template']);
     } else {
-        text = await context.generateRaw({ systemPrompt: prompt.system, prompt: prompt.user, responseLength: tracker.maxTokens });
+        text = await inRawQueue(
+            () => context.generateRaw({ systemPrompt: prompt.system, prompt: prompt.user, responseLength: tracker.maxTokens }),
+            signal,
+        );
         template = context.powerUserSettings?.reasoning ?? null;
     }
     const raw = String(text ?? '');

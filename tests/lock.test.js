@@ -35,8 +35,17 @@ test('never releases while SillyTavern is generating (trap 2)', () => {
     lock.generationStarted();
     lock.setWanted(false);
     assert.deepEqual(log, ['apply']);
+});
+
+test('a release held back during a generation happens when that generation ends or is stopped', () => {
+    const { lock, log } = makeLock();
+    lock.setWanted(true);
+    lock.generationStarted();
+    lock.setWanted(false);
     lock.generationEnded();
-    assert.deepEqual(log, ['apply']);
+    assert.deepEqual(log, ['apply', 'release']);
+    lock.generationEnded();
+    assert.deepEqual(log, ['apply', 'release'], 'released only once');
 });
 
 test('re-applies after SillyTavern ends a generation while the lock is still wanted (trap 1)', () => {

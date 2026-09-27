@@ -15,7 +15,7 @@ function isDisplayed(message, swipeId) {
 function toMs(value) {
     if (value === undefined || value === null || value === '') return '';
     const ms = new Date(value).getTime();
-    return Number.isFinite(ms) ? String(ms) : String(value);
+    return Number.isFinite(ms) ? String(ms) : ''; // an Invalid Date is saved as null, so treat it as missing
 }
 
 export function swipeStamp(message, swipeId) {
@@ -83,11 +83,17 @@ export function storeEdit(message, swipeId, trackerId, value, now = Date.now()) 
     });
 }
 
-/** Trusts the block on the displayed swipe and re-stamps it (after Continue or an edit changed its timestamps). */
-export function adoptBlock(message) {
+/**
+ * Re-stamps the displayed swipe's block after Continue changed the swipe's timestamps.
+ * Only a block that carries `fromStamp` (the stamp recorded when the Continue started)
+ * is adopted, so a block copied from another swipe never is. Returns the current stamp.
+ */
+export function adoptBlock(message, fromStamp) {
+    const swipeId = displayedSwipeId(message);
+    const stamp = swipeStamp(message, swipeId);
     const block = message?.extra?.[STORE_KEY];
-    if (!block?.entries) return;
-    writeBlock(message, displayedSwipeId(message), block.entries);
+    if (block?.entries && block.stamp === fromStamp && fromStamp !== stamp) writeBlock(message, swipeId, block.entries);
+    return stamp;
 }
 
 /** Removes a block that was copied from another swipe. Call when a new reply or swipe arrives. */
@@ -108,7 +114,6 @@ export function purgeStale(message) {
 }
 
 export function markOutdated(message) {
-    adoptBlock(message);
     const swipeId = displayedSwipeId(message);
     const entries = getEntries(message, swipeId);
     let changed = false;
