@@ -102,7 +102,7 @@ test('with auto-continue on, trackers wait until SillyTavern is idle and run onc
     delete fake.body.dataset.generating; // SillyTavern goes idle
     await settle(300);
     assert.equal(fake.state.raw.length, 1);
-    assert.match(fake.state.raw[0].prompt, /S: hello and more/);
+    assert.match(fake.state.raw[0].prompt.at(-1).content, /S: hello and more/);
 });
 
 test('a macro that fails to register is retried on the next save', () => {
@@ -129,4 +129,37 @@ test('/tracker-toggle flips a tracker, sets it with state=, and rejects bad inpu
     await assert.rejects(() => toggle({ name: 'Location', state: 'maybe' }), /must be "on" or "off"/);
     await assert.rejects(() => toggle({ name: 'Nope' }), /no tracker named "Nope"/);
     assert.equal(runtime.settings().trackers[0].enabled, true);
+});
+
+test('"Same as chat" sends extra prompts as a message list and the start of the answer as the prefill', async () => {
+    const location = trackerOf({
+        name: 'Location', systemPrompt: 'Track places.', prompt: 'Where are they?',
+        extraPrompts: [{ text: 'Be brief.', role: 'system', depth: 0 }, { text: 'Location:', role: 'assistant', depth: 0 }],
+    });
+    const chat = [user('A', 'hi'), ai('S', 'hello')];
+    reset([location], chat);
+    await runtime.runMissing(chat[1]);
+    const request = fake.state.raw[0];
+    assert.equal(request.systemPrompt, 'Track places.');
+    assert.deepEqual(request.prompt, [{ role: 'user', content: 'Where are they?' }, { role: 'system', content: 'Be brief.' }]);
+    assert.equal(request.prefill, 'Location:');
+    assert.equal(getEntry(chat[1], location.id).value, 'Location: answer');
+});
+
+test('a profile receives the start of the answer as a trailing assistant message, and the answer keeps it', async () => {
+    let sent;
+    fake.ctx.ConnectionManagerRequestService = {
+        getSupportedProfiles: () => [{ id: 'p1', name: 'Fast', model: 'm' }],
+        sendRequest: async (id, messages) => {
+            sent = messages;
+            return { content: ' forest road' };
+        },
+    };
+    const location = trackerOf({ name: 'Location', profileId: 'p1', prompt: 'Where?', extraPrompts: [{ text: 'Location:', role: 'assistant', depth: 0 }] });
+    const chat = [user('A', 'hi'), ai('S', 'hello')];
+    reset([location], chat);
+    await runtime.runMissing(chat[1]);
+    delete fake.ctx.ConnectionManagerRequestService;
+    assert.deepEqual(sent, [{ role: 'user', content: 'Where?' }, { role: 'assistant', content: 'Location:' }]);
+    assert.equal(getEntry(chat[1], location.id).value, 'Location: forest road');
 });

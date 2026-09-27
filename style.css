@@ -90,6 +90,26 @@
     cursor: not-allowed;
 }
 
+.st-extra-prompts,
+.st-extra-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.st-extra-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 6px;
+}
+
+.st-extra-prompt .st-icon-button {
+    align-self: flex-end;
+}
+
 .st-test-output pre {
     white-space: pre-wrap;
     word-break: break-word;

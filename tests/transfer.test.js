@@ -97,3 +97,9 @@ test('imported macro names that break the editor rules are repaired, with a note
     for (const t of trackers) assert.deepEqual(validateTracker(t, trackers).errors, []);
     assert.equal(notes.filter(n => /Macro/.test(n.message)).length, 4);
 });
+
+test('extra prompts survive an export and import', () => {
+    const t = tracker({ name: 'Location', extraPrompts: [{ text: 'Location:', role: 'assistant', depth: 0 }] });
+    const [item] = parseImport(JSON.stringify(buildExport([t], noProfiles)));
+    assert.deepEqual(item.tracker.extraPrompts, [{ text: 'Location:', role: 'assistant', depth: 0 }]);
+});

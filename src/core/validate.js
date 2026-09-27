@@ -15,9 +15,10 @@ export function validateTracker(tracker, allTrackers, { isMacroTakenElsewhere = 
     }
 
     const prompt = String(tracker.prompt ?? '');
+    const texts = [prompt, ...(tracker.extraPrompts ?? []).map(p => String(p.text ?? ''))];
     if (!prompt.trim()) errors.push('Prompt cannot be empty.');
-    else if (!prompt.includes('{{recent_messages}}')) {
-        warnings.push('The prompt does not contain {{recent_messages}}, so the model will not see any chat messages.');
+    else if (!texts.some(text => text.includes('{{recent_messages}}'))) {
+        warnings.push('Neither the prompt nor an extra prompt contains {{recent_messages}}, so the model will not see any chat messages.');
     }
 
     if (tracker.delivery === 'macro') {

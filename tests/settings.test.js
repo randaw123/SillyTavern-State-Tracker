@@ -104,3 +104,27 @@ test('findTrackerByName ignores case and surrounding spaces', () => {
     assert.equal(findTrackerByName(list, ' location ').id, 'a');
     assert.equal(findTrackerByName(list, 'nope'), null);
 });
+
+test('a tracker without extra prompts gets an empty list of its own', () => {
+    const a = normalizeTracker({ id: 'a' }, idFn);
+    const b = normalizeTracker({ id: 'b' }, idFn);
+    assert.deepEqual(a.extraPrompts, []);
+    a.extraPrompts.push({ text: 'x', role: 'system', depth: 0 });
+    assert.deepEqual(b.extraPrompts, []);
+});
+
+test('extra prompts are repaired: unknown roles become system, depth is clamped, and non-objects are dropped', () => {
+    const t = normalizeTracker({ id: 'a', extraPrompts: [{ text: 'x', role: 'narrator', depth: -2 }, 'junk', { role: 'assistant', depth: '3' }] }, idFn);
+    assert.deepEqual(t.extraPrompts, [
+        { text: 'x', role: 'system', depth: 0 },
+        { text: '', role: 'assistant', depth: 3 },
+    ]);
+});
+
+test('duplicateTracker copies extra prompts without sharing them', () => {
+    const source = normalizeTracker({ id: 'src', extraPrompts: [{ text: 'x', role: 'user', depth: 1 }] }, idFn);
+    const copy = duplicateTracker(source, [source], idFn);
+    assert.deepEqual(copy.extraPrompts, source.extraPrompts);
+    copy.extraPrompts[0].text = 'changed';
+    assert.equal(source.extraPrompts[0].text, 'x');
+});

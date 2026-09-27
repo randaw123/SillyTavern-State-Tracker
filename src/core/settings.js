@@ -25,6 +25,7 @@ export const TRACKER_DEFAULTS = Object.freeze({
     messageFilter: 'all',
     systemPrompt: '',
     prompt: DEFAULT_PROMPT,
+    extraPrompts: Object.freeze([]),
     delivery: 'inject',
     position: 'in_chat',
     depth: 1,
@@ -57,6 +58,15 @@ const CHOICES = {
     role: ['system', 'user', 'assistant'],
 };
 
+// One extra message in a tracker's request, placed by counting back from the end (spec section 4.5).
+function normalizeExtraPrompt(raw) {
+    return {
+        text: String(raw.text ?? ''),
+        role: CHOICES.role.includes(raw.role) ? raw.role : 'system',
+        depth: clampInt(raw.depth, 0, 0, 10000),
+    };
+}
+
 export function newId() {
     return `trk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -88,6 +98,9 @@ export function normalizeTracker(raw, idFn = newId) {
         t[key] = String(t[key] ?? '');
     }
     t.macroName = t.macroName.trim();
+    t.extraPrompts = Array.isArray(t.extraPrompts)
+        ? t.extraPrompts.filter(p => p && typeof p === 'object').map(normalizeExtraPrompt)
+        : [];
     return t;
 }
 

@@ -1,5 +1,5 @@
 // Tracker editor popup with the Test button (spec sections 7.2 and 7.5).
-import { button, el } from './dom.js';
+import { button, el, iconButton } from './dom.js';
 import { renderRun } from './answer-view.js';
 import { ctx } from '../st/context.js';
 import { normalizeTracker } from '../core/settings.js';
@@ -62,6 +62,26 @@ export async function openEditor(runtime, trackerId, draft = null) {
     const messageFilter = select(FILTER_LABELS, base.messageFilter);
     const systemPrompt = el('textarea', { class: 'text_pole', rows: 3, value: base.systemPrompt });
     const prompt = el('textarea', { class: 'text_pole', rows: 10, value: base.prompt });
+    const extraList = el('div', { class: 'st-extra-list' });
+    const extraRows = [];
+    const addExtraRow = ({ text = '', role = 'system', depth = 0 } = {}) => {
+        const row = {
+            role: select(ROLE_LABELS, role),
+            depth: numberInput(depth, 0),
+            text: el('textarea', { class: 'text_pole', rows: 2, value: text }),
+        };
+        const remove = iconButton('fa-trash', 'Remove this prompt', () => {
+            extraRows.splice(extraRows.indexOf(row), 1);
+            row.node.remove();
+            showReport(validate());
+        });
+        row.node = el('div', { class: 'st-extra-prompt' },
+            el('div', { class: 'st-inline' }, field('Role', row.role), field('Depth', row.depth), remove),
+            row.text);
+        extraRows.push(row);
+        extraList.append(row.node);
+    };
+    for (const extra of base.extraPrompts ?? []) addExtraRow(extra);
     const delivery = radioGroup(`${uid}_delivery`, { inject: 'Inject', macro: 'Macro', none: 'None (panel only)' }, base.delivery);
     const macroName = el('input', { type: 'text', class: 'text_pole', value: base.macroName });
     const position = select(POSITION_LABELS, base.position);
@@ -91,6 +111,7 @@ export async function openEditor(runtime, trackerId, draft = null) {
         messageFilter: messageFilter.value,
         systemPrompt: systemPrompt.value,
         prompt: prompt.value,
+        extraPrompts: extraRows.map(row => ({ text: row.text.value, role: row.role.value, depth: row.depth.value })),
         delivery: delivery.value,
         macroName: macroName.value,
         position: position.value,
@@ -115,9 +136,11 @@ export async function openEditor(runtime, trackerId, draft = null) {
         testOutput.replaceChildren(el('div', { class: 'st-muted', text: 'Running…' }));
         try {
             const result = await runtime.testTracker(read());
+            const last = result.messages.length - 1;
+            const label = (m, i) => (i === last && m.role === 'assistant' ? 'ASSISTANT (START OF ANSWER)' : m.role.toUpperCase());
             testOutput.replaceChildren(
                 result.run ? renderRun(result.run) : null,
-                ...result.messages.map(m => el('div', { class: 'st-test-message' }, el('b', { text: m.role.toUpperCase() }), el('pre', { text: m.content }))),
+                ...result.messages.map((m, i) => el('div', { class: 'st-test-message' }, el('b', { text: label(m, i) }), el('pre', { text: m.content }))),
                 el('div', { class: 'st-test-message' }, el('b', { text: 'ANSWER' }), el('pre', { text: result.answer })));
         } catch (error) {
             testOutput.replaceChildren(el('div', { class: 'st-error', text: error?.message || String(error) }));
@@ -133,6 +156,9 @@ export async function openEditor(runtime, trackerId, draft = null) {
         el('div', { class: 'st-inline' }, field('Messages to include', messageCount), field('Counting', messageFilter)),
         field('System prompt (optional)', systemPrompt),
         field('Prompt', prompt, 'Placeholders: {{previous_state}} and {{recent_messages}}. SillyTavern macros such as {{char}} and {{user}} also work.'),
+        field('Extra prompts (optional)',
+            el('div', { class: 'st-extra-prompts' }, extraList, el('div', { class: 'st-buttons' }, button('Add prompt', () => addExtraRow(), { icon: 'fa-plus' }))),
+            'Each extra prompt is sent as its own message, and the same placeholders and macros work. Depth 0 puts it after the prompt, 1 before the prompt, and 2 or more before the system prompt. An Assistant prompt at depth 0 is the start of the answer: the model continues from it, and it is kept at the front of the answer.'),
         field('Delivery', delivery.group),
         macroSection,
         injectSection,

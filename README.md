@@ -19,6 +19,7 @@ After each AI reply, every tracker sends a prompt you wrote to a model you choos
   - `{{recent_messages}}` is the last N messages.
 
   SillyTavern macros such as `{{char}}` also work.
+- **Extra prompts** add more messages to a tracker's request. Click **Add prompt**, then choose the role (System, User or Assistant) and the depth. Depth counts back from the end of the request: 0 puts the prompt after the main prompt, 1 puts it before the main prompt, and 2 or more puts it before the system prompt. An Assistant prompt at depth 0 is the start of the answer: the model continues from it, and it stays at the front of the stored answer. For example, the start `Location:` produces answers such as `Location: forest road`.
 - **Delivery** decides how the AI sees the answer:
   - **Inject** adds it to every prompt automatically.
   - **Macro** makes `{{yourname}}` available to place anywhere.

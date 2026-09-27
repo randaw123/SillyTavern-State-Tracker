@@ -42,3 +42,8 @@ test('macro name rules are ignored for trackers that do not deliver by macro', (
     const t = tracker({ delivery: 'inject', macroName: '!!' });
     assert.equal(validateTracker(t, [t]).errors.length, 0);
 });
+
+test('{{recent_messages}} in an extra prompt counts, so there is no warning', () => {
+    const t = tracker({ prompt: 'Where are they?', extraPrompts: [{ text: 'Chat:\n{{recent_messages}}', role: 'user', depth: 1 }] });
+    assert.deepEqual(validateTracker(t, []).warnings, []);
+});
