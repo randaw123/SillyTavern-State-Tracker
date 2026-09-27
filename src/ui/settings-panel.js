@@ -6,6 +6,7 @@ import { openEditor } from './editor.js';
 import { exportTrackers, importTrackers } from './transfer-ui.js';
 
 const DELIVERY_LABELS = { inject: 'Inject', none: 'None (panel only)' };
+const LOG_LABELS = { off: 'Off', error: 'Errors', info: 'Runs', debug: 'Everything (prompts and responses)' };
 
 export function initSettingsPanel(runtime) {
     const settings = () => runtime.settings();
@@ -27,6 +28,17 @@ export function initSettingsPanel(runtime) {
             runtime.saveSettings();
         });
         return el('label', { class: 'st-inline', title }, el('span', { text: label }), input);
+    };
+
+    const choice = (label, key, options, title) => {
+        const select = el('select', { class: 'text_pole' },
+            Object.entries(options).map(([value, text]) => el('option', { value, text })));
+        select.value = settings()[key];
+        select.addEventListener('change', () => {
+            settings()[key] = select.value;
+            runtime.saveSettings();
+        });
+        return el('label', { class: 'st-inline', title }, el('span', { text: label }), select);
     };
 
     const move = (index, delta) => {
@@ -76,6 +88,8 @@ export function initSettingsPanel(runtime) {
         toggle('Lock while in-order trackers run', 'lockChain', 'When on, SillyTavern acts busy until the in-order trackers finish.'),
         toggle('Clean messages with regex scripts', 'cleanWithRegex', 'Apply your prompt regex scripts to the messages sent to trackers.'),
         number('Skip replies shorter than (characters, 0 = off)', 'minReplyChars', 0, 0, 100000, 'Automatic runs skip AI replies shorter than this.'),
+        choice('Console logging', 'logLevel', LOG_LABELS,
+            'What State Tracker writes to the browser console (F12). Errors: failed runs. Runs: every run starting and finishing, with its connection, model and time. Everything: also the full prompt sent and the raw response, including any thinking.'),
         el('div', { class: 'st-buttons' },
             button('Add tracker', () => openEditor(runtime, null, createTracker(settings().trackers)), { icon: 'fa-plus' }),
             button('Import', () => importTrackers(runtime), { icon: 'fa-file-import' }),

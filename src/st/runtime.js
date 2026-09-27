@@ -3,6 +3,7 @@
 import { ctx, getSettings, LOG_PREFIX, MODULE_NAME } from './context.js';
 import { loadInternals, setBusyFlag } from './internals.js';
 import { buildJobPrompt, sendPrompt } from './requests.js';
+import { log } from './log.js';
 import { currentValue, isMacroTakenElsewhere, refreshInjections, syncMacros } from './delivery.js';
 import { normalizeSettings } from '../core/settings.js';
 import { raceAbort, RunCancelledError, RunEngine } from '../core/engine.js';
@@ -38,17 +39,42 @@ export async function createRuntime() {
         release: () => ctx().activateSendButtons(),
     });
 
+    const messageLabel = message => {
+        const index = (ctx().chat ?? []).indexOf(message);
+        return index === -1 ? 'a message no longer in the chat' : `message #${index}`;
+    };
+    // The details worth saving from a run. A run that timed out never finished timing itself,
+    // so its time is measured here; a run that never left the queue has no time at all.
+    const runDetails = run => {
+        if (!run?.profile) return null;
+        const ms = run.ms ?? (run.startedAt === undefined ? undefined : Math.round(performance.now() - run.startedAt));
+        return {
+            profile: run.profile,
+            model: run.model ?? '',
+            ...(ms === undefined ? {} : { ms }),
+            ...(run.thinkingChars ? { thinkingChars: run.thinkingChars } : {}),
+        };
+    };
+
     const engine = new RunEngine({
         execute: async (job, signal) => {
-            const { answer, details } = await sendPrompt(job.tracker, buildJobPrompt(job.tracker, job.message, job.swipeId), signal);
-            job.run = details; // read back in commit, so the engine only ever handles the answer text
+            // Filled by sendPrompt and read back in commit, so the engine only handles the answer text.
+            job.run = {};
+            log.info(`Running "${job.tracker.name}" on ${messageLabel(job.message)}.`);
+            const { answer } = await sendPrompt(job.tracker, buildJobPrompt(job.tracker, job.message, job.swipeId), signal, job.run);
             return answer;
         },
         commit: (job, outcome) => {
+            const details = runDetails(job.run);
+            if (outcome.value !== undefined) {
+                log.info(`Finished "${job.tracker.name}" on ${messageLabel(job.message)}.`, { ...details, answerChars: outcome.value.length });
+            } else {
+                log.error(`"${job.tracker.name}" failed on ${messageLabel(job.message)}: ${outcome.error}`, details ?? {});
+            }
             if (!(ctx().chat ?? []).includes(job.message)) return;
             if (swipeStamp(job.message, job.swipeId) !== job.meta.stamp) return;
-            if (outcome.value !== undefined) storeAnswer(job.message, job.swipeId, job.tracker.id, outcome.value, Date.now(), job.run);
-            else storeError(job.message, job.swipeId, job.tracker.id, outcome.error);
+            if (outcome.value !== undefined) storeAnswer(job.message, job.swipeId, job.tracker.id, outcome.value, Date.now(), details);
+            else storeError(job.message, job.swipeId, job.tracker.id, outcome.error, Date.now(), details);
             saveChat();
             refreshInjections();
         },
@@ -133,7 +159,7 @@ export async function createRuntime() {
             const timer = setTimeout(() => controller.abort(), seconds * 1000);
             try {
                 const { answer, details } = await raceAbort(sendPrompt(tracker, prompt, controller.signal), controller.signal);
-                return { messages: toChatMessages(prompt), answer, run: details };
+                return { messages: toChatMessages(prompt), answer, run: runDetails(details) };
             } catch (error) {
                 if (error instanceof RunCancelledError) throw new Error(`Timed out after ${seconds} seconds.`);
                 throw error;

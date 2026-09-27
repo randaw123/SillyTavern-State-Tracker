@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    DEFAULT_PROMPT, clampInt, createTracker, duplicateTracker, findTrackerByName,
+    DEFAULT_PROMPT, clampInt, createTracker, duplicateTracker, findTrackerByName, logAllows,
     moveTracker, normalizeSettings, normalizeTracker, uniqueMacroName, uniqueName,
 } from '../src/core/settings.js';
 
@@ -11,8 +11,21 @@ const idFn = () => `id${++counter}`;
 test('normalizeSettings fills every default for missing settings', () => {
     assert.deepEqual(normalizeSettings(undefined), {
         version: 1, enabled: true, timeoutSeconds: 60, lockChain: true,
-        cleanWithRegex: true, minReplyChars: 0, trackers: [],
+        cleanWithRegex: true, minReplyChars: 0, logLevel: 'error', trackers: [],
     });
+});
+
+test('an unknown console logging level falls back to errors only', () => {
+    assert.equal(normalizeSettings({ logLevel: 'debug' }).logLevel, 'debug');
+    assert.equal(normalizeSettings({ logLevel: 'loud' }).logLevel, 'error');
+});
+
+test('each console logging level shows its own messages and the more serious ones', () => {
+    assert.equal(logAllows('info', 'error'), true);
+    assert.equal(logAllows('info', 'info'), true);
+    assert.equal(logAllows('info', 'debug'), false);
+    assert.equal(logAllows('debug', 'info'), true);
+    assert.equal(logAllows('off', 'error'), false);
 });
 
 test('normalizeSettings clamps numbers and keeps booleans', () => {

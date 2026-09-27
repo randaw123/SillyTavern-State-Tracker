@@ -39,7 +39,15 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     lockChain: true,
     cleanWithRegex: true,
     minReplyChars: 0,
+    logLevel: 'error',
 });
+
+// Console logging levels, least to most detailed. Each level also shows everything before it.
+export const LOG_LEVELS = ['off', 'error', 'info', 'debug'];
+
+export function logAllows(setting, level) {
+    return LOG_LEVELS.indexOf(level) > 0 && LOG_LEVELS.indexOf(setting) >= LOG_LEVELS.indexOf(level);
+}
 
 const CHOICES = {
     runMode: ['sync', 'async'],
@@ -93,6 +101,7 @@ export function normalizeSettings(raw, idFn = newId) {
         lockChain: flag('lockChain'),
         cleanWithRegex: flag('cleanWithRegex'),
         minReplyChars: clampInt(src.minReplyChars, SETTINGS_DEFAULTS.minReplyChars, 0),
+        logLevel: LOG_LEVELS.includes(src.logLevel) ? src.logLevel : SETTINGS_DEFAULTS.logLevel,
         trackers: Array.isArray(src.trackers) ? src.trackers.map(t => normalizeTracker(t, idFn)) : [],
     };
 }

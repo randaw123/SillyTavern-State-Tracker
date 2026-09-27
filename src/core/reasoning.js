@@ -19,3 +19,13 @@ export function stripReasoning(text, template) {
     }
     return source.trim();
 }
+
+// Why an answer came back empty. `raw` is the reply text before reasoning was removed, and
+// `reasoning` is any thinking the provider returned separately from it.
+export function emptyAnswerError({ raw, reasoning }) {
+    if (String(raw ?? '').trim()) return 'The model returned only reasoning and no answer. Try a larger max answer length.';
+    if (String(reasoning ?? '').trim()) {
+        return 'The model used its whole answer length on thinking and returned no answer. Raise the max answer length, or lower the reasoning effort in the connection profile\'s preset.';
+    }
+    return 'The model returned an empty answer. The provider may have blocked it; the SillyTavern server window shows its response.';
+}

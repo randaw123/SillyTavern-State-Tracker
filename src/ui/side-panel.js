@@ -91,7 +91,10 @@ export function initSidePanel(runtime) {
             return row;
         }
 
-        if (entry?.error) row.append(el('div', { class: 'st-error', text: `✗ ${entry.error}` }));
+        if (entry?.error) {
+            row.append(el('div', { class: 'st-error', text: `✗ ${entry.error}` }));
+            if (entry.failedRun) row.append(renderRun(entry.failedRun));
+        }
         if (entry?.value) {
             row.append(renderAnswer(entry.value, {
                 isCollapsed: category => collapse.isCollapsed(tracker.id, category),

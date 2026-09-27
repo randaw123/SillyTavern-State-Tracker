@@ -72,14 +72,19 @@ export function storeAnswer(message, swipeId, trackerId, value, now = Date.now()
     updateEntry(message, swipeId, trackerId, () => ({ value, outdated: false, edited: false, updatedAt: now, ...(run ? { run } : {}) }));
 }
 
-export function storeError(message, swipeId, trackerId, error, now = Date.now()) {
-    updateEntry(message, swipeId, trackerId, entry => ({ ...(entry ?? {}), updatedAt: now, error: String(error) }));
+// `run` describes the failed run. It is kept as `failedRun`, apart from the `run` of the answer
+// still shown, and a later success or hand edit clears it.
+export function storeError(message, swipeId, trackerId, error, now = Date.now(), run = null) {
+    updateEntry(message, swipeId, trackerId, entry => {
+        const { failedRun, ...rest } = entry ?? {};
+        return { ...rest, updatedAt: now, error: String(error), ...(run ? { failedRun: run } : {}) };
+    });
 }
 
 export function storeEdit(message, swipeId, trackerId, value, now = Date.now()) {
     updateEntry(message, swipeId, trackerId, entry => {
         if (!String(value ?? '').trim()) return null;
-        const { error, ...rest } = entry ?? {};
+        const { error, failedRun, ...rest } = entry ?? {};
         return { ...rest, value, outdated: false, edited: true, updatedAt: now };
     });
 }

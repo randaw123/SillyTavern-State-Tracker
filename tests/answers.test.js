@@ -148,3 +148,25 @@ test('latestAiIndex skips user messages and hidden messages', () => {
     assert.equal(latestAiIndex(chat), 0);
     assert.equal(latestAiIndex([]), -1);
 });
+
+test('a failed run keeps its details apart from the answer still shown', () => {
+    const m = ai('Cass', ['one']);
+    const good = { profile: 'Tracker', model: 'glm', ms: 20000 };
+    const failed = { profile: 'Tracker', model: 'glm', ms: 95000 };
+    storeAnswer(m, 0, 'loc', 'kitchen', 5, good);
+    storeError(m, 0, 'loc', 'The model returned an empty answer.', 6, failed);
+    const entry = getEntry(m, 'loc');
+    assert.equal(entry.value, 'kitchen');
+    assert.deepEqual(entry.run, good);
+    assert.deepEqual(entry.failedRun, failed);
+});
+
+test('a later success or a hand edit clears the failed run details', () => {
+    const m = ai('Cass', ['one']);
+    storeError(m, 0, 'loc', 'Timed out', 5, { profile: 'Tracker', model: 'glm', ms: 180000 });
+    storeAnswer(m, 0, 'loc', 'kitchen', 6, { profile: 'Tracker', model: 'glm', ms: 20000 });
+    assert.equal(getEntry(m, 'loc').failedRun, undefined);
+    storeError(m, 0, 'loc', 'Timed out', 7, { profile: 'Tracker', model: 'glm', ms: 180000 });
+    storeEdit(m, 0, 'loc', 'hallway', 8);
+    assert.equal(getEntry(m, 'loc').failedRun, undefined);
+});

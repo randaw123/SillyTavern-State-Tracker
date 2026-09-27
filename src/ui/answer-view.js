@@ -41,15 +41,23 @@ function renderItems(items) {
     return out;
 }
 
-// One line naming the model that answered and how long it took, such as "z-ai/glm-4.7 · 38 s".
-// The connection profile, model and exact time are in the hover text.
+// One line naming the model that ran and how long it took, such as "z-ai/glm-4.7 · 38 s".
+// The connection profile, model, exact time and amount of thinking are in the hover text.
+// A run that timed out while still queued has no time.
 export function renderRun(run) {
-    const seconds = run.ms < 10000 ? (run.ms / 1000).toFixed(1) : String(Math.round(run.ms / 1000));
+    const hasTime = typeof run.ms === 'number';
+    const seconds = !hasTime ? null : run.ms < 10000 ? (run.ms / 1000).toFixed(1) : String(Math.round(run.ms / 1000));
     const source = run.profile === 'Same as chat' ? ['Same as chat', run.model] : [run.model || run.profile];
+    const title = [
+        `Connection: ${run.profile}`,
+        `Model: ${run.model || 'unknown'}`,
+        `Time: ${hasTime ? `${run.ms} ms` : 'not sent'}`,
+        ...(run.thinkingChars ? [`Thinking: ${run.thinkingChars.toLocaleString()} characters`] : []),
+    ].join('\n');
     return el('div', {
         class: 'st-muted st-run',
-        text: [...source.filter(Boolean), `${seconds} s`].join(' · '),
-        title: `Connection: ${run.profile}\nModel: ${run.model || 'unknown'}\nTime: ${run.ms} ms`,
+        text: [...source.filter(Boolean), ...(hasTime ? [`${seconds} s`] : [])].join(' · '),
+        title,
     });
 }
 
