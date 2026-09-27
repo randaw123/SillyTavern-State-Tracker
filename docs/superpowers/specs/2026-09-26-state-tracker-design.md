@@ -27,7 +27,9 @@ The extension never changes the text of any chat message.
 - **Current answer:** the answer that is delivered to the AI for a tracker at a given moment. Section 6 defines how it is found.
 - **In-order (sync) tracker:** a tracker that runs one at a time with the other in-order trackers, in list order.
 - **Parallel (async) tracker:** a tracker that starts immediately and runs alongside the others.
-- **The lock:** SillyTavern's supported "generation in progress" state. While it is on, the send, Continue, and impersonate buttons, the swipe arrows, and the last message's buttons are hidden, and the Stop button is shown.
+- **The lock:** SillyTavern's "generation in progress" state, turned on by the extension. It has two parts:
+  - **The visible part.** The send, Continue, and impersonate buttons, the swipe arrows, and the last message's buttons are hidden, and the Stop button is shown.
+  - **The busy flag.** This makes the Enter key, regenerate, and Continue do nothing. Other extensions that wait for SillyTavern to be idle, such as memory and summary extensions, also wait while the flag is on.
 - **The pause point:** SillyTavern's documented hook, called a generation interceptor, that runs just before each generation builds its prompt. SillyTavern waits for it to finish before continuing.
 - **Macro:** a `{{name}}` placeholder that SillyTavern replaces with text wherever it builds a prompt.
 
@@ -40,6 +42,8 @@ The extension never changes the text of any chat message.
 | Enabled | On | The master switch. While it is off, nothing runs, nothing is injected, and every tracker macro returns empty text. |
 | Request timeout | 60 seconds | A run that takes longer than this counts as failed. The allowed range is 5 to 600 seconds. |
 | Lock while in-order trackers run | On | When this is on, the in-order chain holds the lock from its start until its end. When it is off, the chain runs in the background. |
+| Clean messages with regex scripts | On | When this is on, the recent messages sent to trackers are cleaned by your SillyTavern regex scripts, the same way the main prompt is (see section 4.5). |
+| Skip replies shorter than | 0 characters (off) | Automatic triggers skip any AI reply whose text is shorter than this. Manual runs ignore this setting. |
 | Tracker list | Empty | This is the ordered list of trackers. Its order is the in-order run order. |
 
 ### 3.2 Tracker settings
@@ -85,11 +89,16 @@ There is no starting value. Before a tracker's first answer in a chat, `{{previo
 | The "Run" button in the side panel | This runs one tracker that is on and has no answer on the message being viewed. |
 | The "Run all missing" button in the side panel | This runs every tracker that is on and has no answer on the message being viewed. |
 | The "Rerun" or "Retry" button in the side panel | This runs one tracker again on the message being viewed. |
-| `/tracker-run` | This follows the same rule as the Run buttons, applied to the latest AI message (see section 7.6). |
+| `/tracker-run` | This follows the same rule as the Run buttons, applied to the latest AI message (see section 7.7). |
 
 These events never start a run: your own messages, impersonate, background generations started by other extensions, the greeting of a new chat, switching between greetings, and reopening a chat. The greeting is run by hand with the panel buttons or the slash command.
 
 When you **edit an AI message's text**, nothing runs. Instead, that message's answers are marked **outdated**.
+
+Three further rules apply to automatic triggers, meaning a new reply, a new swipe, and Continue. The buttons and slash commands ignore these rules.
+- **Stopped generations never trigger.** If you press Stop while a reply is being generated, nothing runs on the partial reply that SillyTavern saves. For example, you stop a streaming reply you don't like and swipe. The stopped swipe gets no answers, and the trackers run normally on the new swipe. The panel still offers Run buttons on the stopped reply if you want them.
+- **Short replies never trigger.** A reply shorter than the "Skip replies shorter than" setting is skipped.
+- **No repeats.** An automatic trigger never reruns a tracker that already has an answer, or is already running, on that exact message and swipe. This guards against SillyTavern occasionally reporting the same new reply twice. Continue is the only exception, as described above.
 
 ### 4.2 Run every N AI replies
 
@@ -114,7 +123,7 @@ A later tracker in the chain whose prompt uses an earlier tracker's macro receiv
 - The lock is on while at least one **locking run** is running or waiting. A locking run is one of two things: any in-order run while "Lock while in-order trackers run" is on, or any parallel run whose "Lock while running" setting is on.
 - The lock turns off once every locking run has finished, whether it succeeded, failed, timed out, or was cancelled. It is always released, including after errors.
 - **Stop.** Pressing Stop while the lock is on cancels every locking run that is still running and releases the lock.
-- **The pause point is a safety net.** A generation can still start while the lock is on, because the Enter key, some slash commands, and other extensions can bypass it. When that happens, the generation waits at the pause point until the locking runs finish. It then builds its prompt with the fresh answers. If Stop is pressed while a generation is waiting, the wait ends and SillyTavern's own stop behavior applies.
+- **The pause point is a safety net.** A generation can still start while the lock is on, because some slash commands and other extensions bypass the busy flag. If the busy flag is unavailable, the Enter key can also start one (see section 8). When that happens, the generation waits at the pause point until the locking runs finish. It then builds its prompt with the fresh answers. If Stop is pressed while a generation is waiting, the wait ends and SillyTavern's own stop behavior applies.
 - The pause point holds only generations that write to the chat: normal replies, swipes, regenerates, Continue, and impersonate. Background generations started by other extensions are never held, but they still receive the current injections.
 - Runs that do not lock never block or delay anything. A generation that starts while they are running uses their last finished answers.
 
@@ -124,12 +133,14 @@ A later tracker in the chain whose prompt uses an earlier tracker's macro receiv
 
 The **anchor** is the message being tracked.
 
-1. **`{{recent_messages}}`.** Starting at the anchor and moving backward, the extension collects messages that match the Counting setting (AI only, Mine only, or All) until it has "Messages to include" of them. It skips messages that are hidden from the AI and SillyTavern's system notes. The messages are formatted oldest first, one per block, as `Name: message text`. Messages after the anchor are never included.
+1. **`{{recent_messages}}`.** Starting at the anchor and moving backward, the extension collects messages that match the Counting setting (AI only, Mine only, or All) until it has "Messages to include" of them. It skips messages that are hidden from the AI and SillyTavern's system notes. Messages after the anchor are never included.
+   - While "Clean messages with regex scripts" is on, each message is cleaned by your regex scripts that apply to the outgoing prompt. Each message is treated as your input or the AI's output as appropriate, at its own depth, exactly as it would be when SillyTavern builds the main prompt. For example, a script that strips a status block from AI messages strips it here too.
+   - The messages are then formatted oldest first, one per block, as `Name: message text`.
 2. **`{{previous_state}}`.** This is this tracker's answer on the nearest message **before** the anchor, using the swipe that is showing on each message and skipping messages where the tracker has no answer. If there is none, it is empty.
 3. **SillyTavern macros.** Macros such as `{{char}}`, `{{user}}`, `{{description}}`, and `{{scenario}}`, and other trackers' macros, are filled in within the system prompt and the prompt. Tracker macros resolve relative to the anchor, as described in section 6.
 4. **Order of substitution.** SillyTavern macros are filled in on your template first. The two placeholders are filled in afterward, so text inside chat messages or answers is never treated as macros.
 5. **The request.** The optional system prompt is sent as a system message, and the prompt is sent as a user message. With "Same as chat," the request goes through SillyTavern's raw generation on the current connection, and no chat history, character card, or World Info is added. With a profile, the request goes through Connection Manager to that profile. The max answer length applies in both cases.
-6. **The answer.** Whitespace is trimmed from both ends. An empty answer counts as a failure.
+6. **The answer.** Any reasoning, the "thinking" part that reasoning models return, is removed first. That removal uses the reasoning format set on the tracker's connection profile, or the chat's current reasoning format for "Same as chat." For example, "<think>…</think> Location: forest road" is stored as "Location: forest road." Whitespace is then trimmed from both ends. An empty answer counts as a failure.
 
 *Example of what gets sent*, for an Outfit tracker with Messages to include set to 2 and Counting set to All:
 
@@ -213,7 +224,7 @@ Request timeout: [60] seconds    [x] Lock while in-order trackers run
 
 ### 7.2 Tracker editor
 
-The editor opens in a popup. Changes take effect only when you click **Save**, and **Cancel** discards them. Fields that do not apply are hidden. For example, the injection fields are hidden unless Delivery is Inject, and "Lock while running" is hidden unless Run mode is Parallel. The popup also contains the **Test** button described in section 7.4.
+The editor opens in a popup. Changes take effect only when you click **Save**, and **Cancel** discards them. Fields that do not apply are hidden. For example, the injection fields are hidden unless Delivery is Inject, and "Lock while running" is hidden unless Run mode is Parallel. The popup also contains the **Test** button described in section 7.5.
 
 ```
 Name: [Outfit]                               [x] On
@@ -276,7 +287,16 @@ Update the state based on the recent messages. Reply with only the updated state
 └─────────────────────────────────┘
 ```
 
-### 7.4 Test button
+### 7.4 Status line above the input box
+
+While the lock is on, a thin status line appears just above the chat input box, so the locked input always has a visible explanation even when the side panel is closed.
+- While the in-order chain is running, the line reads, for example, **"Updating trackers 2/3 · Outfit"**. Here, 2/3 counts locking runs, and "Outfit" is the in-order tracker currently running.
+- While only parallel locking runs remain, the line reads, for example, **"Updating trackers · 2 running"**.
+- While a generation is waiting at the pause point, the line reads **"Waiting for trackers…"**.
+- The line has its own **Stop** button, which does the same thing as SillyTavern's Stop button: it cancels the locking runs and releases the lock.
+- The line disappears when the lock is released.
+
+### 7.5 Test button
 
 The Test button runs the tracker exactly as it is currently typed in the editor, including unsaved changes, against the latest AI message in the open chat. It then shows:
 - The exact system and user messages that were sent.
@@ -286,7 +306,7 @@ The Test button runs the tracker exactly as it is currently typed in the editor,
 
 It stores nothing, never holds the lock, and ignores the every-N rule. If no chat is open, the button is disabled and a note explains why.
 
-### 7.5 Export and import
+### 7.6 Export and import
 
 - **Export** downloads a file containing all trackers, including their internal IDs. Connection profiles are saved by ID and name only. API keys and other secrets are never included.
 - **Import** reads such a file and lists its trackers with checkboxes, so you can choose which ones to add.
@@ -295,13 +315,14 @@ It stores nothing, never holds the lock, and ignores the every-N rule. If no cha
   - If a tracker's profile does not exist on this setup, the extension matches it by ID first and then by name. If neither matches, the tracker falls back to "Same as chat" and is flagged.
   - If the file is malformed, or comes from a newer format version, it is rejected with a clear message.
 
-### 7.6 Slash commands
+### 7.7 Slash commands
 
 - **`/tracker-run`** runs every tracker that is on and has no answer on the latest AI message.
 - **`/tracker-run name=<tracker name>`** runs just that tracker, under the same condition. Name matching ignores case.
   - Locking and duplicate prevention apply as usual.
   - An unknown name produces an error. A tracker that is off, already answered, or already running is skipped with a notice.
 - **`/tracker-get name=<tracker name>`** returns that tracker's current answer, looking back from the newest message. It returns empty text if the tracker is off or has no answer. It works for every delivery mode.
+- **`/tracker-toggle name=<tracker name>`** flips that tracker's On switch. **`/tracker-toggle name=<tracker name> state=on`** or **`state=off`** sets it directly instead. The change is saved, exactly as if you had clicked the switch, and the command returns the new state, `on` or `off`. For example, a Quick Reply called "RPG mode" could run `/tracker-toggle name=HP state=on` and `/tracker-toggle name=Inventory state=on`.
 
 ## 8. Technical notes
 
@@ -312,16 +333,29 @@ These notes record the SillyTavern integration points that were verified against
   - A new reply fires `MESSAGE_RECEIVED` with the message ID and a generation type. The type values the implementation must check are `'normal'`, `'swipe'`, the Continue values, and `'first_message'`. The greeting uses `'first_message'`, which must be ignored.
   - The other events used are `MESSAGE_EDITED` (which marks answers outdated), `MESSAGE_DELETED`, `MESSAGE_SWIPED`, `CHAT_CHANGED`, `GENERATION_STOPPED`, and `GENERATION_ENDED`.
   - The plan must confirm the exact Continue type values, and whether Continue also fires `MESSAGE_EDITED`. If it does, the outdated marker must not be set for a Continue.
+  - **Stopped generations.** SillyTavern still fires `MESSAGE_RECEIVED` for a partial reply after Stop is pressed, which was verified in its streaming code. The extension therefore records `GENERATION_STOPPED` between `GENERATION_STARTED` and the next `MESSAGE_RECEIVED`, and skips automatic runs for that event. `GENERATION_STARTED` also reports the generation type and whether it is a dry run. Dry runs are ignored.
+  - SillyTavern also fires `MESSAGE_RECEIVED` for a reply cut short by a streaming error. If the plan finds a reliable signal for that case, the reply is treated like a stopped one. If not, the "Skip replies shorter than" setting is the user's protection.
 - **Requests.**
   - "Same as chat" uses `generateRaw({ systemPrompt, prompt, responseLength })`.
   - Profiles use `ConnectionManagerRequestService.sendRequest(profileId, messages, maxTokens, { stream: false, signal, extractData: true, includePreset: true, includeInstruct: true })`.
   - The profile dropdown is built from `getSupportedProfiles()`, with "Same as chat" as the default and missing profiles flagged.
   - Timeouts are enforced by the extension with its own timer.
+  - **Reasoning.** Answers pass through `parseReasoningFromString(text, {}, template)`, and only the content part is kept.
+    - For a profile, the template comes from `getReasoningTemplateByName(profile['reasoning-template'])`.
+    - For "Same as chat," the chat's current reasoning settings are used.
+    - When no template is set, or no reasoning is found, the text is kept unchanged.
+    - The plan must check whether raw generation already separates reasoning for Chat Completion APIs, so that the result is never parsed twice.
+  - **Regex cleaning.** Recent messages pass through the built-in regex engine's `getRegexedString(text, placement, { isPrompt: true, depth })`. The placement is user input for your messages and AI output for AI messages. The depth counts back from the newest message in the chat, matching how the main prompt applies prompt-only scripts.
+    - The engine is imported from the built-in regex extension's module, because it is not part of `getContext()`.
+    - If the engine is unavailable, raw text is used and a warning is logged.
 - **The lock.**
   - `deactivateSendButtons()` turns the lock on and `activateSendButtons()` turns it off. SillyTavern's own `/genraw lock=on` uses the same pair.
   - **Trap 1:** SillyTavern calls `activateSendButtons()` itself at the end of every generation. That would release the tracker lock right after a reply arrives, while trackers triggered by that reply are still running. The extension must re-apply the lock after SillyTavern's end-of-generation cleanup, for example on `GENERATION_ENDED`, whenever locking runs are still active.
   - **Trap 2:** `activateSendButtons()` also clears SillyTavern's internal "sending" flag. The extension must not release the lock while a real generation is in progress, such as one waiting at the pause point. In that case, the generation's own end restores the buttons.
-  - The Enter key checks a different internal flag, so it is not blocked by the lock. The pause point covers that gap.
+  - **The busy flag.** The Enter key, regenerate, and Continue check a separate internal flag (`is_send_press`), which the pair of functions above does not turn on. The extension also sets that flag with `setSendButtonState(true)` and clears it with `setSendButtonState(false)`. The Recast extension uses the same approach.
+    - `setSendButtonState` is exported from SillyTavern's main script but is not part of `getContext()`, so the adapter imports it directly and checks at load time that it exists.
+    - If it is missing, the extension logs a warning and falls back to the visible lock plus the pause point. In that fallback, Enter can post your message, but the reply waits.
+    - Trap 2 applies to the flag in the same way: never clear it while a real generation is in progress.
 - **Injection.** Injection uses `setExtensionPrompt(key, text, position, depth, scan=false, role)`, with a unique key for each tracker. The position values are in-chat 1, before main prompt 2, and after main prompt 0. The role values are system 0, user 1, and assistant 2. A tracker's injection is cleared when it has nothing to deliver, is turned off, is deleted, or changes to another delivery mode.
 - **Macros.**
   - Macros are registered with `macros.register(name, { handler, description })` and removed with `macros.registry.unregisterMacro(name)`. Macro handlers must be synchronous, so they read stored answers directly.
@@ -344,17 +378,23 @@ These notes record the SillyTavern integration points that were verified against
   - Validating macro names and tracker names.
   - Import merge rules.
   - The run engine: the in-order chain, parallel runs, lock accounting, duplicate prevention, cancellation, runs following their message, and timeouts. These tests use fake request functions.
+  - The automatic-trigger rules: stopped generations, short replies, the no-repeat guard, and the Continue exception.
+  - Stripping reasoning, using a fake parser, including the case where no reasoning is present.
+  - The `/tracker-toggle` state changes.
 - **Manual testing.** The code that talks to SillyTavern stays thin and is checked by hand in a running SillyTavern, with this repository linked into its third-party extensions folder. The checklist covers:
   - New replies, swipes, Continue, edits, and deletions.
   - The greeting's manual run.
   - Group chats.
-  - The lock, the Enter-key gap, and Stop.
+  - The lock, including the busy flag blocking Enter, the fallback when the flag is missing, the status line, and Stop.
+  - Stopping a streaming reply and then swiping.
+  - A reasoning model on a profile.
+  - A regex script that strips text from AI messages.
   - Switching chats.
   - Profile and "Same as chat" requests.
   - Inject, Macro, and None delivery, including checking the injected text with SillyTavern's Inspect Prompts.
   - The panel on a wide screen and a narrow one.
   - Export and import.
-  - Both slash commands.
+  - All three slash commands.
 
 ## 10. Out of scope
 
@@ -372,3 +412,6 @@ These items were considered and deliberately left out:
 - Structured (JSON) answers.
 - Streaming answers.
 - Letting World Info scan injected answers.
+- Adding activated World Info or World Info outlets to tracker prompts.
+- Presets, meaning saved tracker sets you can switch between. Export and import, plus `/tracker-toggle`, cover switching instead.
+- Automatically retrying a failed request on a different connection. This could quietly spend money on another model, so the explicit Retry button is used instead.
