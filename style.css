@@ -157,6 +157,81 @@
     word-break: break-word;
 }
 
+/* Collapsible tracker titles and answer categories */
+.st-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.st-toggle[disabled] {
+    cursor: default;
+}
+
+.st-toggle > .fa-solid {
+    width: 0.8em;
+    opacity: 0.7;
+}
+
+.st-answer-structured {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    word-break: break-word;
+}
+
+.st-labels {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 2px 8px;
+}
+
+.st-label,
+.st-entry-name {
+    font-weight: bold;
+}
+
+.st-category,
+.st-entry {
+    display: flex;
+    flex-direction: column;
+}
+
+.st-category {
+    gap: 6px;
+}
+
+.st-category-title {
+    font-size: 0.85em;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.st-entry-field {
+    padding-left: 1em;
+}
+
+.st-entry-single::before {
+    content: '• ';
+}
+
+.st-empty {
+    font-size: 0.9em;
+}
+
 .st-badge {
     font-size: 0.85em;
     opacity: 0.8;

@@ -25,6 +25,7 @@ After each AI reply, every tracker sends a prompt you wrote to a model you choos
   - **None** shows it in the panel only.
 - **In order** trackers run one at a time and, by default, SillyTavern waits for them before the next reply. **Parallel** trackers run alongside them.
 - Open the side panel from the **wand menu → State Tracker**, or with the tracker icon on any AI message.
+- In the side panel, click a tracker's name to collapse or expand it. An answer written as `category:` headings with `- Name | field | field` lines shows one field per line, and each category collapses when you click its heading.
 
 ## Slash commands
 

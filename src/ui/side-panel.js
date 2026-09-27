@@ -1,7 +1,9 @@
 // Side panel (spec section 7.3). Answers are shown with textContent only.
 import { button, el } from './dom.js';
+import { caret, renderAnswer } from './answer-view.js';
 import { ctx } from '../st/context.js';
 import { displayedSwipeId, getEntries, latestAiIndex } from '../core/answers.js';
+import { createCollapseStore } from '../core/collapse.js';
 
 const OPEN_KEY = 'state_tracker_panel_open';
 
@@ -26,6 +28,14 @@ export function initSidePanel(runtime) {
     document.body.append(panel);
     let pinned = null;   // a message chosen with its icon, or null to follow the latest reply
     let editing = null;  // { message, trackerId, textarea } while an answer is being edited
+    const collapse = createCollapseStore({
+        getItem: key => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+    });
+    const toggle = (trackerId, category) => {
+        collapse.toggle(trackerId, category);
+        render();
+    };
 
     const chat = () => ctx().chat ?? [];
 
@@ -44,20 +54,30 @@ export function initSidePanel(runtime) {
     };
 
     const renderRow = (tracker, message, entry, enabled) => {
-        const title = el('div', { class: 'st-row-title' }, el('b', { text: tracker.name }));
-        const row = el('div', { class: 'st-row' }, title);
         if (!tracker.enabled) {
-            row.classList.add('st-off');
-            title.append(el('span', { class: 'st-badge', text: 'off' }));
-            return row;
+            return el('div', { class: 'st-row st-off' },
+                el('div', { class: 'st-row-title' }, el('b', { text: tracker.name }), el('span', { class: 'st-badge', text: 'off' })));
         }
+        // A tracker being edited stays open, so its text box cannot be hidden mid-edit.
+        const isEditing = editing && editing.message === message && editing.trackerId === tracker.id;
+        const collapsed = !isEditing && collapse.isCollapsed(tracker.id);
+        const title = el('button', {
+            type: 'button',
+            class: 'st-toggle st-row-title',
+            'aria-expanded': String(!collapsed),
+            disabled: isEditing,
+            onclick: () => toggle(tracker.id),
+        }, caret(collapsed), el('b', { text: tracker.name }));
+        const row = el('div', { class: 'st-row' }, title);
         const status = runtime.jobStatus(message, tracker.id);
         if (status) title.append(el('span', { class: 'st-badge', text: status === 'queued' ? '⟳ queued' : '⟳ running…' }));
         else if (entry?.value) title.append(el('span', { class: 'st-badge st-ok', text: '✓' }));
+        if (entry?.error) title.append(el('span', { class: 'st-badge st-error', text: '✗ failed' }));
         if (entry?.outdated) title.append(el('span', { class: 'st-badge st-warn', text: '⚠ outdated' }));
         if (entry?.edited) title.append(el('span', { class: 'st-badge', text: 'edited' }));
+        if (collapsed) return row;
 
-        if (editing && editing.message === message && editing.trackerId === tracker.id) {
+        if (isEditing) {
             row.append(editing.textarea, el('div', { class: 'st-row-buttons' },
                 button('Save', () => {
                     runtime.editAnswer(message, tracker.id, editing.textarea.value);
@@ -72,7 +92,12 @@ export function initSidePanel(runtime) {
         }
 
         if (entry?.error) row.append(el('div', { class: 'st-error', text: `✗ ${entry.error}` }));
-        if (entry?.value) row.append(el('div', { class: 'st-answer', text: entry.value }));
+        if (entry?.value) {
+            row.append(renderAnswer(entry.value, {
+                isCollapsed: category => collapse.isCollapsed(tracker.id, category),
+                onToggle: category => toggle(tracker.id, category),
+            }));
+        }
         else if (!status && !entry?.error) row.append(el('div', { class: 'st-muted', text: 'no answer yet' }));
         const label = entry?.error ? 'Retry' : entry?.value ? 'Rerun' : 'Run';
         row.append(el('div', { class: 'st-row-buttons' },
