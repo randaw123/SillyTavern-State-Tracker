@@ -1,0 +1,11 @@
+{
+  "name": "sillytavern-state-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SillyTavern extension that tracks roleplay state with user-defined trackers.",
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check-syntax.mjs"
+  }
+}
