@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EXPORT_FORMAT, applyImport, buildExport, parseImport } from '../src/core/transfer.js';
+import { validateTracker } from '../src/core/validate.js';
 import { tracker } from './helpers.js';
 
 let counter = 0;
@@ -81,4 +82,18 @@ test('a missing profile falls back to "Same as chat" with a note; a profile foun
     assert.equal(trackers[0].profileId, '');
     assert.equal(trackers[1].profileId, 'fast-id');
     assert.deepEqual(notes.map(n => n.name), ['Lost']);
+});
+
+test('imported macro names that break the editor rules are repaired, with a note', () => {
+    const bad = [
+        tracker({ id: 'a', name: 'Dash', delivery: 'macro', macroName: 'my-macro' }),
+        tracker({ id: 'b', name: 'Digit', delivery: 'macro', macroName: '1loc' }),
+        tracker({ id: 'c', name: 'Reserved', delivery: 'macro', macroName: 'state' }),
+        tracker({ id: 'd', name: 'Mood Tracker', delivery: 'macro', macroName: '' }),
+    ];
+    const picks = bad.map(t => ({ tracker: t, profileName: '', action: 'keep-both' }));
+    const { trackers, notes } = applyImport([], picks, { resolveProfile: noProfiles, idFn });
+    assert.deepEqual(trackers.map(t => t.macroName), ['my_macro', 'm1loc', 'state2', 'mood_tracker']);
+    for (const t of trackers) assert.deepEqual(validateTracker(t, trackers).errors, []);
+    assert.equal(notes.filter(n => /Macro/.test(n.message)).length, 4);
 });

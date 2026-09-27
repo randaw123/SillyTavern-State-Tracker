@@ -53,14 +53,16 @@ export function syncMacros() {
             console.warn(`${LOG_PREFIX} {{${name}}} is already registered elsewhere, so State Tracker did not register it.`);
             continue;
         }
-        macros.register(name, {
+        const registered = macros.register(name, {
             description: 'State Tracker: the current answer of a tracker.',
             handler: () => {
                 const tracker = getSettings().trackers.find(t => t.id === trackerId);
                 return tracker ? currentValue(tracker) : '';
             },
         });
-        registeredMacros.set(name, trackerId);
+        // register() returns null when it fails; leave it unrecorded so the next save retries.
+        if (registered) registeredMacros.set(name, trackerId);
+        else console.warn(`${LOG_PREFIX} {{${name}}} could not be registered; it will be retried on the next save.`);
     }
 }
 

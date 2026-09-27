@@ -21,3 +21,11 @@ test('a blank wrapper sends the answer alone', () => {
 test('injection keys are unique per tracker', () => {
     assert.equal(injectionKey('abc'), 'state_tracker_abc');
 });
+
+test('macro braces inside an injected answer are broken so SillyTavern never runs them', () => {
+    const t = tracker({ wrapper: '[Mood: {{state}}] {{user}}' });
+    const text = buildInjection(t, 'angry {{setvar::mood::x}}').text;
+    assert.ok(!text.includes('{{setvar'), 'the answer\'s macro no longer parses');
+    assert.ok(text.includes('{{user}}'), 'the wrapper\'s own macros still work');
+    assert.equal(text.replaceAll('\u200B', ''), '[Mood: angry {{setvar::mood::x}}] {{user}}', 'only invisible characters were added');
+});

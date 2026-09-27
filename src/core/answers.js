@@ -138,9 +138,11 @@ export function findCurrentValue(chat, trackerId, startIndex) {
     return null;
 }
 
+// A swipe keeps the message it replaces in the chat, so step past it. A regenerate has
+// already deleted the message it replaces before the pause point, so the newest message counts.
 export function generationAnchor(chat, type) {
     let anchor = chat.length - 1;
-    if ((type === 'swipe' || type === 'regenerate') && anchor >= 0 && !chat[anchor]?.is_user) anchor -= 1;
+    if (type === 'swipe' && anchor >= 0 && !chat[anchor]?.is_user) anchor -= 1;
     return anchor;
 }
 

@@ -1,5 +1,6 @@
 // Export file format and import merge rules (spec section 7.6).
 import { newId, normalizeTracker, uniqueMacroName, uniqueName } from './settings.js';
+import { MACRO_NAME_PATTERN, RESERVED_NAMES } from './validate.js';
 
 export const EXPORT_FORMAT = 'sillytavern-state-tracker';
 export const EXPORT_VERSION = 1;
@@ -30,6 +31,15 @@ export function parseImport(text) {
     return data.trackers.map(raw => ({ tracker: normalizeTracker(raw), profileName: String(raw?.profileName ?? '') }));
 }
 
+// Turns an imported macro name into one the editor would accept (spec section 3.3).
+function allowedMacroName(raw, trackerName) {
+    let name = String(raw ?? '').trim() || String(trackerName ?? '').trim().toLowerCase();
+    name = name.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'tracker';
+    if (!MACRO_NAME_PATTERN.test(name)) name = `m${name}`;
+    if (RESERVED_NAMES.includes(name.toLowerCase())) name = `${name}2`;
+    return name;
+}
+
 export function applyImport(existing, picks, { resolveProfile, isMacroTakenElsewhere = () => false, idFn = newId }) {
     const trackers = existing.map(t => ({ ...t }));
     const notes = [];
@@ -46,15 +56,19 @@ export function applyImport(existing, picks, { resolveProfile, isMacroTakenElsew
             notes.push({ name: t.name, message: `Renamed from "${originalName}" because that name was taken.` });
         }
 
-        if (t.delivery === 'macro' && t.macroName) {
+        if (t.delivery === 'macro') {
+            const base = allowedMacroName(t.macroName, t.name);
             const taken = others.filter(x => x.delivery === 'macro').map(x => x.macroName);
-            let macro = t.macroName;
+            let macro = base;
             while (taken.some(n => n.toLowerCase() === macro.toLowerCase()) || isMacroTakenElsewhere(macro)) {
                 taken.push(macro);
-                macro = uniqueMacroName(t.macroName, taken);
+                macro = uniqueMacroName(base, taken);
             }
-            if (macro !== t.macroName) {
-                notes.push({ name: t.name, message: `Macro renamed from {{${t.macroName}}} to {{${macro}}} because the original name was taken.` });
+            if (!t.macroName) {
+                notes.push({ name: t.name, message: `Macro name was empty, so it is now {{${macro}}}.` });
+            } else if (macro !== t.macroName) {
+                const reason = base !== t.macroName ? 'is not allowed' : 'was taken';
+                notes.push({ name: t.name, message: `Macro renamed from {{${t.macroName}}} to {{${macro}}} because the original name ${reason}.` });
             }
             t.macroName = macro;
         }

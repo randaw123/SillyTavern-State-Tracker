@@ -16,7 +16,7 @@ export const EVENTS = {
 export function installFakeSillyTavern() {
     const handlers = {};
     const body = { dataset: {} };
-    const state = { prompts: {}, macros: new Map(), log: [], raw: [], rawInFlight: 0, rawMaxInFlight: 0, rawReply: () => 'answer' };
+    const state = { prompts: {}, macros: new Map(), commands: {}, failRegister: false, log: [], raw: [], rawInFlight: 0, rawMaxInFlight: 0, rawReply: () => 'answer' };
     const emit = (name, ...args) => {
         for (const fn of handlers[name] ?? []) fn(...args);
     };
@@ -44,7 +44,11 @@ export function installFakeSillyTavern() {
         },
         macros: {
             registry: { hasMacro: name => state.macros.has(name), unregisterMacro: name => state.macros.delete(name) },
-            register: (name, definition) => state.macros.set(name, definition),
+            register: (name, definition) => {
+                if (state.failRegister) return null; // SillyTavern returns null when registration fails
+                state.macros.set(name, definition);
+                return definition;
+            },
         },
         deactivateSendButtons: () => {
             state.log.push('deactivate');
@@ -57,7 +61,7 @@ export function installFakeSillyTavern() {
         stopGeneration: () => emit(EVENTS.GENERATION_STOPPED),
         eventSource: { on: (name, fn) => (handlers[name] ??= []).push(fn) },
         eventTypes: EVENTS,
-        SlashCommandParser: { addCommandObject() {} },
+        SlashCommandParser: { addCommandObject: command => { state.commands[command.name] = command; } },
         SlashCommand: { fromProps: props => props },
         SlashCommandNamedArgument: { fromProps: props => props },
         ARGUMENT_TYPE: { STRING: 'string' },

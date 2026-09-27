@@ -133,12 +133,13 @@ test('findCurrentValue walks back to the newest message with a value, skipping f
     assert.equal(findCurrentValue(chat, 'other', 4), null);
 });
 
-test('generationAnchor excludes the message a swipe or regenerate is replacing', () => {
+test('generationAnchor excludes a swiped message; a regenerated one is already deleted, so the newest message counts', () => {
     const chat = [ai('S', 'greet'), user('A', 'hi'), ai('S', 'r1')];
     assert.equal(generationAnchor(chat, 'normal'), 2);
     assert.equal(generationAnchor(chat, 'continue'), 2);
     assert.equal(generationAnchor(chat, 'swipe'), 1);
-    assert.equal(generationAnchor(chat, 'regenerate'), 1);
+    assert.equal(generationAnchor(chat, 'regenerate'), 2, 'SillyTavern deleted the regenerated reply before the pause point');
+    assert.equal(generationAnchor([...chat, ai('S', 'r2')], 'regenerate'), 3);
     assert.equal(generationAnchor(chat.slice(0, 2), 'regenerate'), 1);
 });
 

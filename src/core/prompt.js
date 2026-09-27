@@ -2,8 +2,8 @@
 // swapped for private-use tokens before SillyTavern's macro pass and filled afterwards,
 // so the macro pass never sees them and never touches chat text or answers.
 
-const PREVIOUS = 'ST_PREVIOUS_STATE';
-const RECENT = 'ST_RECENT_MESSAGES';
+const PREVIOUS = '\uE000ST_PREVIOUS_STATE\uE000';
+const RECENT = '\uE000ST_RECENT_MESSAGES\uE000';
 
 function protect(text) {
     return String(text ?? '')

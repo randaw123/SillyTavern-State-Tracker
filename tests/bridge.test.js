@@ -9,10 +9,12 @@ console.warn = () => {}; // the bridge warns that SillyTavern's internal modules
 const fake = installFakeSillyTavern();
 const { createRuntime } = await import('../src/st/runtime.js');
 const { wireEvents } = await import('../src/st/events.js');
+const { registerCommands } = await import('../src/st/commands.js');
 const { normalizeTracker } = await import('../src/core/settings.js');
 const { getEntry, storeAnswer } = await import('../src/core/answers.js');
 const runtime = await createRuntime();
 wireEvents(runtime);
+registerCommands(runtime);
 
 const settle = (ms = 30) => new Promise(resolve => setTimeout(resolve, ms));
 const trackerOf = overrides => normalizeTracker({ id: overrides.name.toLowerCase(), ...overrides });
@@ -101,4 +103,30 @@ test('with auto-continue on, trackers wait until SillyTavern is idle and run onc
     await settle(300);
     assert.equal(fake.state.raw.length, 1);
     assert.match(fake.state.raw[0].prompt, /S: hello and more/);
+});
+
+test('a macro that fails to register is retried on the next save', () => {
+    reset([trackerOf({ name: 'Outfit', delivery: 'macro', macroName: 'outfit' })], []);
+    fake.state.macros.delete('outfit');
+    fake.state.failRegister = true;
+    runtime.settings().trackers = [trackerOf({ name: 'Outfit2', delivery: 'macro', macroName: 'outfit2' })];
+    runtime.saveSettings();
+    assert.equal(fake.state.macros.has('outfit2'), false);
+    fake.state.failRegister = false;
+    runtime.saveSettings();
+    assert.equal(fake.state.macros.has('outfit2'), true);
+});
+
+test('/tracker-toggle flips a tracker, sets it with state=, and rejects bad input', async () => {
+    reset([trackerOf({ name: 'Location' })], []);
+    const toggle = fake.state.commands['tracker-toggle'].callback;
+    assert.equal(await toggle({ name: 'location' }), 'off');
+    assert.equal(runtime.settings().trackers[0].enabled, false);
+    assert.equal(await toggle({ name: 'Location' }), 'on');
+    assert.equal(await toggle({ name: 'Location', state: 'OFF' }), 'off');
+    assert.equal(await toggle({ name: 'Location', state: 'off' }), 'off');
+    assert.equal(await toggle({ name: 'Location', state: 'on' }), 'on');
+    await assert.rejects(() => toggle({ name: 'Location', state: 'maybe' }), /must be "on" or "off"/);
+    await assert.rejects(() => toggle({ name: 'Nope' }), /no tracker named "Nope"/);
+    assert.equal(runtime.settings().trackers[0].enabled, true);
 });
