@@ -13,7 +13,7 @@ function isName(text) {
 }
 
 function isEmptyValue(text) {
-    return EMPTY_VALUES.includes(text.trim().toLowerCase());
+    return EMPTY_VALUES.includes(text.trim().replace(/\.$/, '').toLowerCase());
 }
 
 function splitFields(text) {
@@ -51,7 +51,8 @@ export function parseAnswer(text) {
             structured = true;
             if (isEmptyValue(labeled[2])) empty.push([at, labeled[1].trim()]);
             else (current ? current.items : top).push({ kind: 'label', label: labeled[1].trim(), fields: splitFields(labeled[2]) });
-        } else {
+        } else if (!isEmptyValue(line)) {
+            // A bare "none" under a heading leaves the category empty.
             (current ? current.items : top).push({ kind: 'text', text: line });
         }
     }

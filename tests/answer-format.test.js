@@ -70,3 +70,9 @@ test('a dash line is an entry even when it contains a colon', () => {
     ]);
     assert.deepEqual(parsed.empty, []);
 });
+
+test('a bare none line under a heading counts as empty', () => {
+    const parsed = parseAnswer('boundaries:\nnone\nfirsts:\nNone.\nthreads:\n- the one-bathroom problem');
+    assert.deepEqual(parsed.sections.map(s => s.title), ['threads']);
+    assert.deepEqual(parsed.empty, ['boundaries', 'firsts']);
+});
